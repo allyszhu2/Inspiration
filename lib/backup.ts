@@ -23,7 +23,7 @@ export async function exportBackup(): Promise<Blob> {
     app: "inspiration",
     version: 1,
     exportedAt: Date.now(),
-    cards,
+    cards: cards.filter((c) => !c.deleted),
     images: await Promise.all(
       images.map(async (img) => ({
         id: img.id,
@@ -49,7 +49,11 @@ export async function importBackup(file: Blob): Promise<number> {
     });
   }
   for (const card of backup.cards) {
-    await putCard({ ...card, memory: card.memory ?? freshMemory() });
+    await putCard({
+      ...card,
+      memory: card.memory ?? freshMemory(),
+      updatedAt: card.updatedAt ?? card.createdAt ?? Date.now(),
+    });
   }
   return backup.cards.length;
 }

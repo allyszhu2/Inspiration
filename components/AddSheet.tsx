@@ -94,6 +94,7 @@ export default function AddSheet({ onSave, onClose }: AddSheetProps) {
       url: type === "link" ? url.trim() : "",
       tags: parseTags(tagsInput),
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       inMemory: memorize,
       memory: freshMemory(),
     };

@@ -24,6 +24,13 @@ export interface Card {
   /** Key into the images store, for image cards */
   imageId?: string;
   createdAt: number;
+  /** Last local modification, ms. Drives last-write-wins sync merging. */
+  updatedAt: number;
+  /**
+   * Tombstone: deleted cards are kept (without their images) so the
+   * deletion propagates to other devices via sync.
+   */
+  deleted?: boolean;
   /** Whether this card is in the memory stack */
   inMemory: boolean;
   memory: MemoryState;

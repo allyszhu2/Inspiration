@@ -4,6 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { exportBackup, importBackup } from "@/lib/backup";
 import * as db from "@/lib/db";
 import { resizeImage } from "@/lib/images";
+import {
+  isSyncEnabled,
+  markAllPending,
+  markPending,
+  syncNow,
+} from "@/lib/sync";
 import type { Card, CardType, ViewMode } from "@/lib/types";
 import {
   dailyPick,
@@ -25,6 +31,7 @@ import {
   TimelineIcon,
 } from "./Icons";
 import MemoryMode from "./MemoryMode";
+import SyncSheet from "./SyncSheet";
 import { GridView, ListView, TimelineView } from "./Views";
 
 const TYPE_FILTERS: { value: CardType | "all"; label: string }[] = [
@@ -47,14 +54,53 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dailyDismissed, setDailyDismissed] = useState(false);
   const [toast, setToast] = useState("");
+  const [showSync, setShowSync] = useState(false);
+  const [syncOn, setSyncOn] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  async function reloadFromDb() {
+    const all = await db.getAllCards();
+    setCards(
+      all.filter((c) => !c.deleted).sort((a, b) => b.createdAt - a.createdAt)
+    );
+  }
+
+  /** Sync and refresh. Auto-syncs stay quiet; manual syncs report. */
+  async function runSync(manual = false) {
+    if (!isSyncEnabled()) return;
+    setSyncing(true);
+    try {
+      const { pulled } = await syncNow();
+      if (pulled > 0) await reloadFromDb();
+      if (manual) {
+        showToast(pulled > 0 ? `Synced — ${pulled} updated` : "Synced — up to date");
+      }
+    } catch (e) {
+      if (manual) showToast(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  /** Debounced auto-sync after local edits. */
+  function scheduleSync() {
+    if (!isSyncEnabled()) return;
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => runSync(false), 2500);
+  }
 
   useEffect(() => {
     db.requestPersistence();
     db.getAllCards().then((all) => {
-      setCards(all.sort((a, b) => b.createdAt - a.createdAt));
+      setCards(
+        all.filter((c) => !c.deleted).sort((a, b) => b.createdAt - a.createdAt)
+      );
       setLoaded(true);
+      setSyncOn(isSyncEnabled());
+      runSync(false);
     });
     const savedView = localStorage.getItem("inspiration.view") as ViewMode | null;
     if (savedView === "grid" || savedView === "list" || savedView === "timeline") {
@@ -91,19 +137,29 @@ export default function App() {
     setCards((prev) => [card, ...prev]);
     setShowAdd(false);
     showToast(card.inMemory ? "Saved to collection & memory stack" : "Saved");
+    markPending(card.id);
+    scheduleSync();
   }
 
   async function updateCard(card: Card) {
+    card = { ...card, updatedAt: Date.now() };
     await db.putCard(card);
     setCards((prev) => prev.map((c) => (c.id === card.id ? card : c)));
     setDetail((d) => (d && d.id === card.id ? card : d));
+    markPending(card.id);
+    scheduleSync();
   }
 
   async function removeCard(card: Card) {
-    await db.deleteCard(card);
+    // Tombstone rather than hard delete, so the deletion syncs to other
+    // devices. The image blobs are removed locally right away.
+    await db.putCard({ ...card, deleted: true, updatedAt: Date.now() });
+    if (card.imageId) await db.deleteImage(card.imageId);
     setCards((prev) => prev.filter((c) => c.id !== card.id));
     setDetail(null);
     showToast("Deleted");
+    markPending(card.id);
+    scheduleSync();
   }
 
   function reviewCard(card: Card, remembered: boolean) {
@@ -124,9 +180,12 @@ export default function App() {
     if (!file) return;
     try {
       const count = await importBackup(file);
-      const all = await db.getAllCards();
-      setCards(all.sort((a, b) => b.createdAt - a.createdAt));
+      await reloadFromDb();
       showToast(`Imported ${count} cards`);
+      if (isSyncEnabled()) {
+        await markAllPending();
+        scheduleSync();
+      }
     } catch {
       showToast("Import failed — not a valid backup");
     }
@@ -236,6 +295,24 @@ export default function App() {
           </button>
           {menuOpen && (
             <div className="menu">
+              {syncOn && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    runSync(true);
+                  }}
+                >
+                  {syncing ? "Syncing…" : "Sync now"}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setShowSync(true);
+                }}
+              >
+                {syncOn ? "Sync settings…" : "Set up sync…"}
+              </button>
               <button onClick={handleExport}>Export backup…</button>
               <button
                 onClick={() => {
@@ -329,6 +406,21 @@ export default function App() {
       </button>
 
       {showAdd && <AddSheet onSave={addCard} onClose={() => setShowAdd(false)} />}
+
+      {showSync && (
+        <SyncSheet
+          onClose={() => {
+            setShowSync(false);
+            setSyncOn(isSyncEnabled());
+          }}
+          onEnabled={async () => {
+            setShowSync(false);
+            setSyncOn(true);
+            await markAllPending();
+            runSync(true);
+          }}
+        />
+      )}
 
       {detail && (
         <CardDetail

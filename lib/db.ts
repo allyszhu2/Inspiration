@@ -43,7 +43,10 @@ function tx<T>(
 }
 
 export function getAllCards(): Promise<Card[]> {
-  return tx<Card[]>(CARDS, "readonly", (s) => s.getAll());
+  return tx<Card[]>(CARDS, "readonly", (s) => s.getAll()).then((cards) =>
+    // Cards saved before sync existed lack updatedAt — backfill from createdAt.
+    cards.map((c) => ({ ...c, updatedAt: c.updatedAt ?? c.createdAt }))
+  );
 }
 
 export function putCard(card: Card): Promise<IDBValidKey> {
@@ -55,6 +58,10 @@ export async function deleteCard(card: Card): Promise<void> {
   if (card.imageId) {
     await tx(IMAGES, "readwrite", (s) => s.delete(card.imageId!));
   }
+}
+
+export function deleteImage(imageId: string): Promise<undefined> {
+  return tx(IMAGES, "readwrite", (s) => s.delete(imageId));
 }
 
 export function putImage(image: StoredImage): Promise<IDBValidKey> {
