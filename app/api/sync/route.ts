@@ -9,6 +9,23 @@ import {
 import type { Card } from "@/lib/types";
 
 /**
+ * Health check: open /api/sync in a browser to see whether storage is
+ * wired up. Reveals only configuration state, never data.
+ */
+export async function GET() {
+  const mode = storeMode();
+  return Response.json({
+    configured: mode !== "none",
+    storage:
+      mode === "blob"
+        ? "Vercel Blob connected"
+        : mode === "fs"
+          ? "local development folder"
+          : "not configured — create a Blob store in the Vercel dashboard (Storage tab), connect it to this project for all environments, then redeploy",
+  });
+}
+
+/**
  * One round trip does a full sync: the client pushes its locally-changed
  * cards, and receives every card that changed on the server since its last
  * sync (which includes what other devices pushed).
