@@ -150,19 +150,25 @@ export async function putImage(
   }
 }
 
-/** Returns a redirect URL (blob) or raw bytes (fs), or null if absent. */
+/**
+ * Returns the image bytes, or null if absent. Always bytes, never a
+ * redirect: redirecting the browser to the blob URL would turn the request
+ * cross-origin (with the passcode header attached) and get blocked by CORS.
+ */
 export async function getImage(
   imageId: string,
   kind: "full" | "thumb"
-): Promise<{ url: string } | { data: Buffer } | null> {
+): Promise<Buffer | null> {
   if (storeMode() === "blob") {
     const { list } = await blobSdk();
     const { blobs } = await list({ prefix: `images/${imageId}/${kind}.jpg` });
-    return blobs.length ? { url: blobs[0].url } : null;
+    if (!blobs.length) return null;
+    const res = await fetch(blobs[0].url);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
   }
   try {
-    const data = await fs.readFile(path.join(FS_ROOT, "images", imageId, `${kind}.jpg`));
-    return { data };
+    return await fs.readFile(path.join(FS_ROOT, "images", imageId, `${kind}.jpg`));
   } catch {
     return null;
   }

@@ -70,17 +70,23 @@ async function uploadImages(passcode: string, imageId: string): Promise<void> {
   }
 }
 
+/** Best-effort: a failed download must never abort the sync — missing
+ * images are retried on every later sync until they arrive. */
 async function downloadImages(passcode: string, imageId: string): Promise<boolean> {
-  const blobs: Blob[] = [];
-  for (const kind of ["full", "thumb"] as const) {
-    const res = await fetch(`/api/image/${imageId}?kind=${kind}`, {
-      headers: { "x-sync-passcode": passcode },
-    });
-    if (!res.ok) return false;
-    blobs.push(await res.blob());
+  try {
+    const blobs: Blob[] = [];
+    for (const kind of ["full", "thumb"] as const) {
+      const res = await fetch(`/api/image/${imageId}?kind=${kind}`, {
+        headers: { "x-sync-passcode": passcode },
+      });
+      if (!res.ok) return false;
+      blobs.push(await res.blob());
+    }
+    await db.putImage({ id: imageId, full: blobs[0], thumb: blobs[1] });
+    return true;
+  } catch {
+    return false;
   }
-  await db.putImage({ id: imageId, full: blobs[0], thumb: blobs[1] });
-  return true;
 }
 
 export interface SyncResult {
@@ -150,14 +156,20 @@ async function doSync(): Promise<SyncResult> {
       await db.putCard(card);
     } else {
       await db.putCard(card);
-      if (card.imageId && !(await db.getImage(card.imageId))) {
-        if (await downloadImages(passcode, card.imageId)) {
-          syncedImages.add(card.imageId);
-          writeSet(KEY_IMAGES, syncedImages);
-        }
-      }
     }
     pulled++;
+  }
+
+  // Fetch every image any live card is missing — not just newly-pulled
+  // cards — so a download that failed on an earlier sync self-heals.
+  for (const card of await db.getAllCards()) {
+    if (card.deleted || !card.imageId) continue;
+    if (await db.getImage(card.imageId)) continue;
+    if (await downloadImages(passcode, card.imageId)) {
+      syncedImages.add(card.imageId);
+      writeSet(KEY_IMAGES, syncedImages);
+      pulled++;
+    }
   }
 
   // Clear pending only for cards unchanged since we snapshotted them, so

@@ -31,8 +31,7 @@ export async function GET(
 
   const image = await getImage(id, v.kind);
   if (!image) return Response.json({ error: "Not found" }, { status: 404 });
-  if ("url" in image) return Response.redirect(image.url, 302);
-  return new Response(new Uint8Array(image.data), {
+  return new Response(new Uint8Array(image), {
     headers: {
       "content-type": "image/jpeg",
       "cache-control": "private, max-age=31536000, immutable",
