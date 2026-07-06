@@ -6,13 +6,21 @@ import { isDue, shuffle } from "@/lib/utils";
 import { CloseIcon } from "./Icons";
 import { useImage } from "./useImage";
 
+/**
+ * Which side is being tested:
+ *  - "source": the quote is shown, you recall where it's from (default)
+ *  - "quote":  the source is shown, you recite the quote
+ */
+type TestSide = "source" | "quote";
+const SIDE_KEY = "inspiration.memory.side";
+
 interface MemoryModeProps {
   cards: Card[];
   onReview: (card: Card, remembered: boolean) => void;
   onClose: () => void;
 }
 
-/** The prompt shown before reveal: source if we have one, else opening words. */
+/** Prompt when reciting the quote: source if we have one, else opening words. */
 function hintFor(card: Card): string {
   if (card.source) return card.source;
   const words = card.text.split(/\s+/);
@@ -21,10 +29,12 @@ function hintFor(card: Card): string {
 
 function MemoryCardFace({
   card,
+  side,
   revealed,
   onReveal,
 }: {
   card: Card;
+  side: TestSide;
   revealed: boolean;
   onReveal: () => void;
 }) {
@@ -33,14 +43,34 @@ function MemoryCardFace({
   return (
     <div className="memory-card" onClick={revealed ? undefined : onReveal}>
       {!revealed ? (
+        side === "source" ? (
+          <>
+            <div className="memory-prompt-label">Where is this from?</div>
+            {card.text ? (
+              <div className="memory-quote">“{card.text}”</div>
+            ) : (
+              image && <img className="memory-answer-img" src={image} alt="" />
+            )}
+            <div className="memory-tap-note">Recall the source, then tap to reveal</div>
+          </>
+        ) : (
+          <>
+            <div className="memory-prompt-label">Do you remember…</div>
+            {card.type === "image" && image && !card.text ? (
+              <img className="memory-answer-img" src={image} alt="" />
+            ) : (
+              <div className="memory-hint">{hintFor(card)}</div>
+            )}
+            <div className="memory-tap-note">Recall it, then tap to reveal</div>
+          </>
+        )
+      ) : side === "source" ? (
         <>
-          <div className="memory-prompt-label">Do you remember…</div>
-          {card.type === "image" && image && !card.text ? (
-            <img className="memory-answer-img" src={image} alt="" />
-          ) : (
-            <div className="memory-hint">{hintFor(card)}</div>
-          )}
-          <div className="memory-tap-note">Recall it, then tap to reveal</div>
+          <div className="memory-prompt-label">It’s from</div>
+          <div className="memory-source">
+            {card.source || "No source recorded"}
+          </div>
+          {image && <img className="memory-answer-img" src={image} alt="" style={{ marginTop: 18 }} />}
         </>
       ) : (
         <>
@@ -72,6 +102,9 @@ export default function MemoryMode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [side, setSide] = useState<TestSide>(() =>
+    localStorage.getItem(SIDE_KEY) === "quote" ? "quote" : "source"
+  );
   const [practicing, setPracticing] = useState(deck.due.length === 0);
   const active = practicing ? deck.practice : deck.due;
   const [index, setIndex] = useState(0);
@@ -80,6 +113,12 @@ export default function MemoryMode({
 
   const card = active[index];
   const finished = !card;
+
+  function switchSide(next: TestSide) {
+    setSide(next);
+    setRevealed(false);
+    localStorage.setItem(SIDE_KEY, next);
+  }
 
   function grade(ok: boolean) {
     if (!practicing) onReview(card, ok);
@@ -109,6 +148,23 @@ export default function MemoryMode({
           <CloseIcon />
         </button>
       </div>
+
+      {!stackEmpty && !finished && (
+        <div className="memory-toggle" role="group" aria-label="Which side to test">
+          <button
+            className={side === "source" ? "active" : ""}
+            onClick={() => switchSide("source")}
+          >
+            Guess the source
+          </button>
+          <button
+            className={side === "quote" ? "active" : ""}
+            onClick={() => switchSide("quote")}
+          >
+            Recite the quote
+          </button>
+        </div>
+      )}
 
       <div className="memory-stage">
         {stackEmpty ? (
@@ -148,8 +204,9 @@ export default function MemoryMode({
           </div>
         ) : (
           <MemoryCardFace
-            key={card.id}
+            key={`${card.id}:${side}`}
             card={card}
+            side={side}
             revealed={revealed}
             onReveal={() => setRevealed(true)}
           />

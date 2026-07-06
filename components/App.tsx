@@ -30,6 +30,7 @@ import {
   SparkIcon,
   TimelineIcon,
 } from "./Icons";
+import MassImportSheet from "./MassImportSheet";
 import MemoryMode from "./MemoryMode";
 import SyncSheet from "./SyncSheet";
 import { GridView, ListView, TimelineView } from "./Views";
@@ -55,6 +56,7 @@ export default function App() {
   const [dailyDismissed, setDailyDismissed] = useState(false);
   const [toast, setToast] = useState("");
   const [showSync, setShowSync] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [syncOn, setSyncOn] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
@@ -123,7 +125,7 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(""), 2500);
   }
 
-  async function addCard(card: Card, imageFile: Blob | null) {
+  async function persistCard(card: Card, imageFile: Blob | null): Promise<Card> {
     if (imageFile) {
       const imageId = uid();
       const [full, thumb] = await Promise.all([
@@ -134,10 +136,25 @@ export default function App() {
       card = { ...card, imageId };
     }
     await db.putCard(card);
-    setCards((prev) => [card, ...prev]);
-    setShowAdd(false);
-    showToast(card.inMemory ? "Saved to collection & memory stack" : "Saved");
     markPending(card.id);
+    return card;
+  }
+
+  async function addCard(card: Card, imageFile: Blob | null) {
+    const saved = await persistCard(card, imageFile);
+    setCards((prev) => [saved, ...prev]);
+    setShowAdd(false);
+    showToast(saved.inMemory ? "Saved to collection & memory stack" : "Saved");
+    scheduleSync();
+  }
+
+  async function addCards(items: { card: Card; imageFile: Blob | null }[]) {
+    for (const item of items) {
+      await persistCard(item.card, item.imageFile);
+    }
+    await reloadFromDb();
+    setShowImport(false);
+    showToast(`Imported ${items.length} card${items.length === 1 ? "" : "s"}`);
     scheduleSync();
   }
 
@@ -313,6 +330,14 @@ export default function App() {
               >
                 {syncOn ? "Sync settings…" : "Set up sync…"}
               </button>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setShowImport(true);
+                }}
+              >
+                Mass import…
+              </button>
               <button onClick={handleExport}>Export backup…</button>
               <button
                 onClick={() => {
@@ -406,6 +431,10 @@ export default function App() {
       </button>
 
       {showAdd && <AddSheet onSave={addCard} onClose={() => setShowAdd(false)} />}
+
+      {showImport && (
+        <MassImportSheet onImport={addCards} onClose={() => setShowImport(false)} />
+      )}
 
       {showSync && (
         <SyncSheet

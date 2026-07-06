@@ -96,6 +96,27 @@ export function parseTags(input: string): string[] {
   );
 }
 
+/**
+ * Parse mass-import text: every non-empty line is one card, and "=="
+ * separates the quote from its source.
+ *   It is joy to be hidden but disaster not to be found. == D. W. Winnicott
+ */
+export function parseMassImport(input: string): { text: string; source: string }[] {
+  return input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const sep = line.indexOf("==");
+      if (sep === -1) return { text: line, source: "" };
+      return {
+        text: line.slice(0, sep).trim(),
+        source: line.slice(sep + 2).trim(),
+      };
+    })
+    .filter((entry) => entry.text);
+}
+
 /** Case-insensitive search across text, source, tags, and url. Supports #tag terms. */
 export function matchesQuery(card: Card, query: string): boolean {
   const q = query.trim().toLowerCase();

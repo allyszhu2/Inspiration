@@ -980,6 +980,30 @@ a {
   color: var(--ink-faint);
 }
 
+.memory-toggle {
+  display: flex;
+  margin: 0 auto 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  overflow: hidden;
+  width: fit-content;
+  flex-shrink: 0;
+}
+
+.memory-toggle button {
+  padding: 8px 16px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.memory-toggle button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .memory-stage {
   flex: 1;
   display: flex;
@@ -1025,6 +1049,21 @@ a {
   line-height: 1.5;
   white-space: pre-line;
   text-align: left;
+}
+
+.memory-quote {
+  font-family: var(--serif);
+  font-size: 22px;
+  line-height: 1.5;
+  white-space: pre-line;
+  text-align: left;
+}
+
+.memory-source {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 26px;
+  line-height: 1.4;
 }
 
 .memory-answer-img {
@@ -1093,6 +1132,22 @@ a {
 .memory-done p {
   color: var(--ink-soft);
   margin-bottom: 24px;
+}
+
+/* ————— Mass import ————— */
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 20px 0;
+}
+
+.import-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-bottom: 10px;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 /* ————— Menu ————— */
