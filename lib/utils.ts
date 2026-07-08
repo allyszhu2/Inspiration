@@ -1,4 +1,4 @@
-import type { Card } from "./types";
+import type { Card, CardType } from "./types";
 
 export function uid(): string {
   return (
@@ -94,6 +94,45 @@ export function parseTags(input: string): string[] {
         .filter(Boolean)
     )
   );
+}
+
+/**
+ * Parse quick-add input and infer the card type:
+ *  - starts with a double quote  → quote (wrapping quotes stripped)
+ *  - is a URL                    → link
+ *  - anything else               → note
+ * "==" separates the text from its source, same as mass import.
+ */
+export function parseQuickAdd(raw: string): {
+  type: CardType;
+  text: string;
+  source: string;
+  url: string;
+} {
+  let text = raw.trim();
+  let source = "";
+  const sep = text.indexOf("==");
+  if (sep !== -1) {
+    source = text.slice(sep + 2).trim();
+    text = text.slice(0, sep).trim();
+  }
+  if (/^(https?:\/\/\S+|www\.\S+)$/i.test(text)) {
+    return {
+      type: "link",
+      text: "",
+      source,
+      url: /^www\./i.test(text) ? `https://${text}` : text,
+    };
+  }
+  if (/^["“]/.test(text)) {
+    return {
+      type: "quote",
+      text: text.replace(/^["“]\s*/, "").replace(/\s*["”]$/, ""),
+      source,
+      url: "",
+    };
+  }
+  return { type: "note", text, source, url: "" };
 }
 
 /**

@@ -252,14 +252,89 @@ a {
   color: var(--paper);
 }
 
-/* ————— Type filter chips ————— */
+/* ————— Quick add ————— */
+
+.quickadd {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 7px 7px 7px 14px;
+  min-width: 0;
+  color: var(--ink-faint);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.quickadd:focus-within {
+  border-color: var(--ink-faint);
+}
+
+.quickadd.dragging {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.quickadd > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.quickadd input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.quickadd input::placeholder {
+  color: var(--ink-faint);
+}
+
+.quickadd-save {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ————— Search + type filter row ————— */
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.filter-row .search {
+  flex: 0 1 280px;
+  min-width: 150px;
+  padding: 6px 12px;
+}
+
+@media (max-width: 640px) {
+  .filter-row .search {
+    flex: 1 1 100%;
+  }
+}
 
 .chips {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
-  margin-bottom: 22px;
+  flex: 1;
 }
 
 .chips::-webkit-scrollbar {

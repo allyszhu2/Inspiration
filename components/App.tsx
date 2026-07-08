@@ -10,11 +10,14 @@ import {
   markPending,
   syncNow,
 } from "@/lib/sync";
+import { recognizeText } from "@/lib/ocr";
 import type { Card, CardType, ViewMode } from "@/lib/types";
+import { freshMemory } from "@/lib/types";
 import {
   dailyPick,
   isDue,
   matchesQuery,
+  parseQuickAdd,
   scheduleReview,
   uid,
 } from "@/lib/utils";
@@ -31,6 +34,7 @@ import {
   TimelineIcon,
 } from "./Icons";
 import MassImportSheet from "./MassImportSheet";
+import QuickAdd from "./QuickAdd";
 import MemoryMode from "./MemoryMode";
 import SyncSheet from "./SyncSheet";
 import { GridView, ListView, TimelineView } from "./Views";
@@ -148,6 +152,55 @@ export default function App() {
     scheduleSync();
   }
 
+  function blankCard(): Card {
+    const now = Date.now();
+    return {
+      id: uid(),
+      type: "note",
+      text: "",
+      source: "",
+      url: "",
+      tags: [],
+      createdAt: now,
+      updatedAt: now,
+      inMemory: false,
+      memory: freshMemory(),
+    };
+  }
+
+  async function quickAddText(raw: string) {
+    const parsed = parseQuickAdd(raw);
+    if (!parsed.text && !parsed.url) return;
+    const saved = await persistCard({ ...blankCard(), ...parsed }, null);
+    setCards((prev) => [saved, ...prev]);
+    showToast(`Saved as ${parsed.type}`);
+    scheduleSync();
+  }
+
+  /** Dropped/pasted images become cards immediately; OCR fills the text in
+   * behind the scenes so the drop never has to wait. */
+  async function quickAddImages(files: File[]) {
+    const saved: Card[] = [];
+    for (const file of files) {
+      saved.push(await persistCard({ ...blankCard(), type: "image" }, file));
+    }
+    setCards((prev) => [...[...saved].reverse(), ...prev]);
+    showToast(
+      saved.length === 1
+        ? "Image saved — reading text…"
+        : `${saved.length} images saved — reading text…`
+    );
+    scheduleSync();
+    for (let i = 0; i < saved.length; i++) {
+      try {
+        const text = await recognizeText(files[i]);
+        if (text) await updateCard({ ...saved[i], text });
+      } catch {
+        // unreadable photo: the card simply keeps an empty caption
+      }
+    }
+  }
+
   async function addCards(items: { card: Card; imageFile: Blob | null }[]) {
     for (const item of items) {
       await persistCard(item.card, item.imageFile);
@@ -245,25 +298,7 @@ export default function App() {
       </header>
 
       <div className="toolbar">
-        <div className="search">
-          <SearchIcon />
-          <input
-            type="search"
-            placeholder="Search words, sources, #tags…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button
-              className="icon-btn"
-              style={{ width: 26, height: 26, border: "none" }}
-              onClick={() => setQuery("")}
-              aria-label="Clear search"
-            >
-              <CloseIcon size={14} />
-            </button>
-          )}
-        </div>
+        <QuickAdd onText={quickAddText} onImages={quickAddImages} />
 
         <div className="view-switch" role="group" aria-label="View">
           <button
@@ -362,16 +397,37 @@ export default function App() {
         />
       </div>
 
-      <div className="chips">
-        {TYPE_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            className={`chip ${typeFilter === f.value ? "active" : ""}`}
-            onClick={() => setTypeFilter(f.value)}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="filter-row">
+        <div className="search">
+          <SearchIcon />
+          <input
+            type="search"
+            placeholder="Search words, sources, #tags…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button
+              className="icon-btn"
+              style={{ width: 26, height: 26, border: "none" }}
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+            >
+              <CloseIcon size={14} />
+            </button>
+          )}
+        </div>
+        <div className="chips">
+          {TYPE_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              className={`chip ${typeFilter === f.value ? "active" : ""}`}
+              onClick={() => setTypeFilter(f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {daily && !dailyDismissed && !filtering && (
