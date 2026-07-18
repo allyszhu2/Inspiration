@@ -116,6 +116,14 @@ export default function App() {
       localStorage.getItem("inspiration.dailyDismissed") ===
         new Date().toDateString()
     );
+    // Re-sync when the app comes back into view, so cards texted in or
+    // added on another device appear as soon as you return.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") runSync(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function switchView(v: ViewMode) {

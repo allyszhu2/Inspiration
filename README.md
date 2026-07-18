@@ -34,6 +34,28 @@ Then on each device: open the app → ⋯ menu → **Set up sync** → enter the
 
 During local development (`npm run dev`) sync uses a `.sync-data/` directory instead of Blob, so the whole flow works without any cloud configuration.
 
+## Text-to-card (Twilio)
+
+Text a dedicated number and the message becomes a card on all your devices.
+Quick-add rules apply (`"` → quote, URL → link, `== Source`, photos → image
+cards). The app is receive-only — it never replies — so there are no outbound
+message fees and no A2P campaign registration.
+
+1. Create a Twilio account at [twilio.com/try-twilio](https://www.twilio.com/try-twilio).
+2. In the [console](https://console.twilio.com), buy a local number with SMS+MMS
+   (Phone Numbers → Manage → Buy a number, ~$1.15/mo).
+3. On the number's **Configure** tab, under *Messaging Configuration* →
+   *A message comes in*, choose **Webhook**, URL
+   `https://YOUR-APP.vercel.app/api/inbound-sms`, method **HTTP POST**.
+4. In Vercel → Settings → Environment Variables, add (then redeploy):
+   - `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` — from the console dashboard
+   - `ALLOWED_SMS_FROM` — your cell in E.164 form, e.g. `+15551234567`
+     (texts from anyone else are ignored)
+5. Save the number as a contact and text it.
+
+Requests are verified against Twilio's signature, and only allowlisted
+senders can create cards.
+
 ## A note on your data
 
 Cards are stored on-device (IndexedDB) and mirrored to your Vercel Blob store when sync is on. The JSON export (⋯ → Export backup) remains a good periodic safety net.
