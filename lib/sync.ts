@@ -71,18 +71,18 @@ async function uploadImages(passcode: string, imageId: string): Promise<void> {
 }
 
 /** Best-effort: a failed download must never abort the sync — missing
- * images are retried on every later sync until they arrive. */
+ * images are retried on every later sync until they arrive. The thumbnail
+ * is regenerated locally from the full image, so display quality never
+ * depends on what happens to be stored remotely. */
 async function downloadImages(passcode: string, imageId: string): Promise<boolean> {
   try {
-    const blobs: Blob[] = [];
-    for (const kind of ["full", "thumb"] as const) {
-      const res = await fetch(`/api/image/${imageId}?kind=${kind}`, {
-        headers: { "x-sync-passcode": passcode },
-      });
-      if (!res.ok) return false;
-      blobs.push(await res.blob());
-    }
-    await db.putImage({ id: imageId, full: blobs[0], thumb: blobs[1] });
+    const res = await fetch(`/api/image/${imageId}?kind=full`, {
+      headers: { "x-sync-passcode": passcode },
+    });
+    if (!res.ok) return false;
+    const full = await res.blob();
+    const { resizeThumb } = await import("./images");
+    await db.putImage({ id: imageId, full, thumb: await resizeThumb(full) });
     return true;
   } catch {
     return false;

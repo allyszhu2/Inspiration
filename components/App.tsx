@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { exportBackup, importBackup } from "@/lib/backup";
 import * as db from "@/lib/db";
-import { resizeImage } from "@/lib/images";
+import { resizeFull, resizeThumb, upgradeThumbnails } from "@/lib/images";
 import {
   isSyncEnabled,
   markAllPending,
@@ -63,6 +63,8 @@ export default function App() {
   const [showImport, setShowImport] = useState(false);
   const [syncOn, setSyncOn] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  // Bumped when thumbnails are regenerated so mounted images reload.
+  const [thumbEpoch, setThumbEpoch] = useState(0);
   const importInput = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -107,6 +109,11 @@ export default function App() {
       setLoaded(true);
       setSyncOn(isSyncEnabled());
       runSync(false);
+      // Rebuild old low-res thumbnails in the background, then re-render.
+      upgradeThumbnails().then(async () => {
+        await reloadFromDb();
+        setThumbEpoch((n) => n + 1);
+      });
     });
     const savedView = localStorage.getItem("inspiration.view") as ViewMode | null;
     if (savedView === "grid" || savedView === "list" || savedView === "timeline") {
@@ -141,8 +148,8 @@ export default function App() {
     if (imageFile) {
       const imageId = uid();
       const [full, thumb] = await Promise.all([
-        resizeImage(imageFile, 1600),
-        resizeImage(imageFile, 480),
+        resizeFull(imageFile),
+        resizeThumb(imageFile),
       ]);
       await db.putImage({ id: imageId, full, thumb });
       card = { ...card, imageId };
@@ -483,11 +490,11 @@ export default function App() {
           )}
         </div>
       ) : view === "grid" ? (
-        <GridView cards={filtered} onOpen={setDetail} onTag={(t) => setQuery(`#${t}`)} />
+        <GridView key={thumbEpoch} cards={filtered} onOpen={setDetail} onTag={(t) => setQuery(`#${t}`)} />
       ) : view === "list" ? (
-        <ListView cards={filtered} onOpen={setDetail} onTag={(t) => setQuery(`#${t}`)} />
+        <ListView key={thumbEpoch} cards={filtered} onOpen={setDetail} onTag={(t) => setQuery(`#${t}`)} />
       ) : (
-        <TimelineView cards={filtered} onOpen={setDetail} onTag={(t) => setQuery(`#${t}`)} />
+        <TimelineView key={thumbEpoch} cards={filtered} onOpen={setDetail} onTag={(t) => setQuery(`#${t}`)} />
       )}
 
       <button className="fab" onClick={() => setShowAdd(true)} aria-label="Add">
